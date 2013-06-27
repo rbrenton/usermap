@@ -26,9 +26,12 @@ $conn = @pg_connect(PG_CONNECTION_STRING);
 
 function fetchFlairPage() {
   static $ch = null;
-  static $url = 'http://www.reddit.com/r/'.REDDIT_SUB.'/about/flair/';
+  static $url = null;
   static $cookieFile = null;
-  $cookieFile = tempnam('/tmp', 'CURLJAR');
+
+  // Initialize static variables.
+  if($url===null) $url = 'http://www.reddit.com/r/'.REDDIT_SUB.'/about/flair/';
+  if($cookieFile===null) $cookieFile = tempnam('/tmp', 'CURLJAR');
 
 
   if($ch===false || $url===false) {
@@ -74,7 +77,7 @@ function fetchFlairPage() {
   curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
   curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
   if(!($result = curl_exec($ch))) {
-    $url = null;
+    $url = false;
     @unlink($cookieFile);
     return null;
   }
@@ -84,7 +87,7 @@ function fetchFlairPage() {
   if(preg_match($regex, $result, $regs)) {
     $url = $regs[1];
   } else {
-    $url = null;
+    $url = false;
     @unlink($cookieFile);
   }
 
