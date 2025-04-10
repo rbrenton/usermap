@@ -1,3 +1,6 @@
 body { margin: 0px; padding: 0px; }
 #header { padding: 5px; background: #EEE; }
 #page { margin: 5px; padding: 5px; }
+#map_canvas > div:nth-child(2) {
+  display: none;
+}

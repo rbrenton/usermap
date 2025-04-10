@@ -1,0 +1,19 @@
+<?php
+
+define('PG_CONNECTION_STRING', 'host=127.0.0.1 user=someuser dbname=somedb password=somepw');
+define('PG_TABLE', 'usermap_locations');
+define('REDDIT_USERNAME', 'your username here');
+define('REDDIT_PASSWORD', 'your password here');
+define('REDDIT_API_APP', 'fixme');
+define('REDDIT_API_SECRET', 'fixme');
+define('HTML_TITLE', 'r/flying Home Bases');
+define('HTML_HEADER', 'Home base map of <a href="http://www.reddit.com/r/flying">r/flying</a>.');
+define('GMAP_DEFAULT_LAT', 37.0625);
+define('GMAP_DEFAULT_LON', -95.677068);
+define('GMAP_DEFAULT_ZOOM', 2);
+
+define('CURL_REDDIT_USERAGENT', 'script:com.github.rbrenton.usermap:v1.2.0 (by /u/prothid)');
+define('CURL_OTHER_USERAGENT', 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:10.0.2) Gecko/20100101 Firefox/10.0.2');
+
+define('URL_REDDIT_FLAIR', 'https://oauth.reddit.com/r/flying/api/flairlist.json?limit=500');
+define('URL_REDDIT_ACCESS_TOKEN', 'https://www.reddit.com/api/v1/access_token');
