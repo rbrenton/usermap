@@ -1,4 +1,4 @@
-CREATE TABLE usermap_locations (
+CREATE TABLE rflying_locations (
     name character varying(64) NOT NULL,
     station character varying(4) NOT NULL,
     lat double precision,
