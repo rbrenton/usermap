@@ -1,7 +1,7 @@
 <?php
 /**
- * @name UserMap for Google Maps
- * @version 1.0.0 [June 25, 2013]
+ * @name UserMap for r/flying
+ * @version 1.2.1
  * @author R. Brenton Strickler
  * @fileoverview
  * This script maps users by their home location based on reddit flair.
