@@ -23,14 +23,14 @@
 
 require_once('settings.php');
 
-function echoStationJSON($station, $pilots) {
+function stationJSON($station, $pilots) {
   $lat = (double) $pilots[0]['lat'];
   $lon = (double) $pilots[0]['lon'];
 
   if (preg_match(';^[A-Z0-9]{3,4}$;', $station)) {
     $html = "<a href=\"http://www.gcmap.com/airport/{$station}\">{$station}</a><br/><br/>";
   } else {
-    $html = "{$station}<br/><br/>";
+    $html = htmlspecialchars($station, ENT_QUOTES, 'UTF-8') . "<br/><br/>";
   }
 
   $count = 0;
@@ -50,23 +50,20 @@ function echoStationJSON($station, $pilots) {
   $stationVar = $tmp;
   $stationVars[$tmp] = true;
 
-  echo json_encode(array('title'=>"{$stationVar} - {$count}",'count'=>$count,'lon'=>$lon,'lat'=>$lat, 'html'=>$html)).',';
+  return json_encode(array('title'=>"{$stationVar} - {$count}",'count'=>$count,'lon'=>$lon,'lat'=>$lat, 'html'=>$html));
 }
 
 switch ($_GET['a']) {
 case 'data.json':
+  header('Content-Type: application/javascript; charset=utf-8');
   $conn = @pg_connect(PG_CONNECTION_STRING);
-  $stations = array();
-
-  echo <<<JAVASCRIPT
-var data = [
-JAVASCRIPT;
 
   $select = pg_query("SELECT name,station,lat,lon,flair FROM ".PG_TABLE." WHERE station!='' AND lat IS NOT NULL ORDER BY lat,lon,station='n/a',length(station) desc,station;");
   $count = pg_num_rows($select);
   $lastStation = null;
   $lastLatLon = null;
   $pilots = array();
+  $items = array();
   for ($i = 0; $i < $count; $i++) {
     $row = pg_fetch_assoc($select);
     $station = $row['station'];
@@ -80,7 +77,7 @@ JAVASCRIPT;
     }
     // Output last group.
     if ($lastLatLon != $latLon) {
-      echoStationJSON($lastStation, $pilots);
+      $items[] = stationJSON($lastStation, $pilots);
 
       // New group.
       $pilots = array();
@@ -92,13 +89,10 @@ JAVASCRIPT;
     $pilots[] = $row;
     if ($i + 1 >= $count) {
       // Output very last group.
-      echoStationJSON($station, $pilots);
+      $items[] = stationJSON($station, $pilots);
     }
   }
-  echo <<<JAVASCRIPT
-];
-
-JAVASCRIPT;
+  echo "var data = [" . implode(',', $items) . "];\n";
   die();
 
   break;
@@ -106,9 +100,9 @@ default:
   throw new Exception('Invalid page');
 case '':
 }
-$defaultLat = 37.0625;
-$defaultLon = -95.677068;
-$defaultZoom = 2;
+$defaultLat = GMAP_DEFAULT_LAT;
+$defaultLon = GMAP_DEFAULT_LON;
+$defaultZoom = GMAP_DEFAULT_ZOOM;
 
 if ($_GET['name']!='') {
   $conn = @pg_connect(PG_CONNECTION_STRING);

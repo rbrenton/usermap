@@ -51,16 +51,6 @@ function fetchFlairPage($next = null)
         return null;
     }
 
-    if (0) {
-        $flair = array();
-        $select = pg_query("SELECT name, flair FROM ".PG_TABLE);
-        while ($row = pg_fetch_assoc($select)) {
-            $flair[$row['name']] = $row['flair'];
-        }
-        $ch = false;
-        return $flair;
-    }
-
     if ($ch === null || $accessExpiresAt <= time() || $accessToken === null) {
         // Initialize curl
         if ($ch === null) {
@@ -226,7 +216,7 @@ function fetchLatLon($station)
     }
 
     // As a last resort, let's check gcmap.com for the lat/lon.
-    $url = "http://www.gcmap.com/airport/{$station}";
+    $url = "https://www.gcmap.com/airport/{$station}";
 
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
@@ -322,8 +312,8 @@ function updatePilot95($name, $flair)
         $lon = 'null';
     }
 
-    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s, rows=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair, $count);
-    $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW()) ON CONFLICT(name) DO UPDATE SET time_updated = NOW(), station = '%s', flair = '%s', lat = %s, lon = %s;", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair, $pgStation, $pgFlair, $lat, $lon);
+    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair);
+    $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW()) ON CONFLICT(name) DO UPDATE SET time_updated = NOW(), station = '%s', flair = '%s', lat = %s, lon = %s WHERE %s.locked = false;", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair, $pgStation, $pgFlair, $lat, $lon, PG_TABLE);
     printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
     $insert = pg_query($sql);
 }
