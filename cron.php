@@ -2,7 +2,7 @@
 <?php
 /**
  * @name UserMap for r/flying
- * @version 1.2.1
+ * @version 1.3.0
  * @author R. Brenton Strickler
  *
  * @description This script maps users by their home location based on reddit flair.
@@ -23,178 +23,47 @@
  */
 
 require_once('settings.php');
+require_once(__DIR__ . '/lib/RateLimiter.php');
+require_once(__DIR__ . '/lib/RedditFlairClient.php');
 
-$conn = @pg_connect(PG_CONNECTION_STRING);
-
-
-function maskSecrets($str)
-{
-    $str = preg_replace('/"access_token": "[^"]+"/', '"access_token": "**REDACTED**"', $str);
-    $str = preg_replace('/eyJhbGciOi[A-Za-z0-9._-]+/', '**REDACTED**', $str);
-    return $str;
+// Prevent overlapping cron executions.
+$lockFile = sys_get_temp_dir() . '/usermap-cron.lock';
+$lock = fopen($lockFile, 'c');
+if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+    fprintf(STDERR, "%s: another instance is already running\n", date('c'));
+    exit(1);
 }
 
-function fetchFlairPage($next = null)
-{
-    static $ch = null;
-    static $url = null;
-    static $accessExpiresAt = 0;
-    static $accessToken = null;
-    static $lastAfter = null;
-
-    // Initialize static variables.
-    if ($url === null) {
-        $url = URL_REDDIT_FLAIR;
-    }
-
-    if ($ch === false || $url === false) {
-        return null;
-    }
-
-    if ($ch === null || $accessExpiresAt <= time() || $accessToken === null) {
-        // Initialize curl
-        if ($ch === null) {
-          $ch = curl_init();
-          curl_setopt($ch, CURLOPT_USERAGENT, CURL_REDDIT_USERAGENT);
-          curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        }
-
-        // Authenticate
-        $fields = array(
-          'grant_type' => 'password',
-          'username' => REDDIT_USERNAME,
-          'password' => REDDIT_PASSWORD
-        );
-        $user = sprintf('%s:%s', REDDIT_API_APP, REDDIT_API_SECRET);
-
-        $_url = URL_REDDIT_ACCESS_TOKEN;
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_URL, $_url);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
-        curl_setopt($ch, CURLOPT_USERPWD, $user);//!
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array());
-
-        // Send token request
-        printf("%s:%d fetching url=%s\n", __FUNCTION__, __LINE__, $_url);
-        rateLimit("redditoauth");
-        if (!$ch || !($result = curl_exec($ch))) {
-            $ch = false;
-            return null;
-        }
-
-        printf("%s:%d result=%s\n", __FUNCTION__, __LINE__, maskSecrets($result));
-        $obj = json_decode($result);
-
-        if (!is_object($obj)) {
-          throw new Exception("Failed to parse json object.");
-        }
-
-        if (property_exists($obj, "error")) {
-            printf("%s:%d error=%s error_description=%s\n", __FUNCTION__, __LINE__, $obj->error, property_exists($obj, "error_description") ? $obj->error_description: "");
-            return null;
-        }
-
-        if (!property_exists($obj, "access_token")) {
-            throw new Exception("Failed to find access_token.");
-        }
-
-        $accessToken = $obj->access_token;
-
-        if (!property_exists($obj, "expires_in")) {
-            throw new Exception("Failed to find expires_in.");
-        }
-
-        $accessExpiresAt = time() + floor($obj->expires_in * 0.9);
-
-
-        // Reset curl to GET defaults
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "GET");
-        curl_setopt($ch, CURLOPT_POST, 0);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, null);
-        curl_setopt($ch, CURLOPT_USERPWD, "");
-    }
-
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json', "Authorization: bearer {$accessToken}"));
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-    curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
-
-    printf("%s:%d fetching url=%s\n", __FUNCTION__, __LINE__, $url);
-    rateLimit("redditflair");
-    if (!($result = curl_exec($ch))) {
-        $url = false;
-        return null;
-    }
-
-    $obj = json_decode($result);
-
-    printf("%s:%d result=%s\n", __FUNCTION__, __LINE__, $result);
-
-    if (!is_object($obj)) {
-      throw new Exception("Failed to parse json object.");
-    }
-
-    if (property_exists($obj, "error")) {
-        printf("%s:%d error=%s message=%s\n", __FUNCTION__, __LINE__, $obj->error, property_exists($obj, "message") ? $obj->message: "");
-        return null;
-    }
-
-    $after = property_exists($obj, "next") ? $obj->next : null;
-
-    if ($after != null && $lastAfter != $after) {
-      $url = URL_REDDIT_FLAIR."&after={$after}";
-      $lastAfter = $after;
-    } else {
-      $url = false;
-    }
-
-    $flair = array();
-
-    foreach ($obj->users as $i => $user) {
-        $flair[$user->user] = $user->flair_text;
-    }
-
-    return $flair;
+$conn = pg_connect(PG_CONNECTION_STRING);
+if (!$conn) {
+    fprintf(STDERR, "%s: database connection failed\n", date('c'));
+    exit(1);
 }
 
-function rateLimit($key, $delay = 1.0)
-{
-    static $delayUntil = array();
+$rateLimiter = new RateLimiter();
 
-    if (isset($delayUntil[$key])) {
-        $delta = $delayUntil[$key] - microtime(true);
 
-        if ($delta > 0) {
-            printf("%s:%d sleeping=%s ratelimit=%s\n", __FUNCTION__, __LINE__, $delta, $key);
-            usleep($delta);
-        }
-    }
-
-    $delayUntil[$key] = microtime(true) + $delay;
-}
-
-function fetchLatLon($station)
+function fetchLatLon($conn, $station, RateLimiter $rateLimiter)
 {
     static $ch = null;
     static $stations = array();
 
-    if ($station == '')
+    if ($station === '')
         return null;
 
-    // First look if the station lat/lon has already been looked up.
     if (isset($stations[$station]))
         return $stations[$station];
 
-    // Next, see if we already have it in the database.
-    $pgStation = pg_escape_string($station);
-
-    $select = pg_query("SELECT lat,lon FROM ".PG_TABLE." WHERE station='{$pgStation}' AND lat IS NOT NULL AND lon IS NOT NULL LIMIT 1;");
+    // Check database cache before hitting the network.
+    $select = pg_query_params($conn,
+        "SELECT lat, lon FROM " . PG_TABLE . " WHERE station=$1 AND lat IS NOT NULL AND lon IS NOT NULL LIMIT 1",
+        array($station)
+    );
 
     if ($row = pg_fetch_assoc($select)) {
         $stations[$station] = array($row['lat'], $row['lon']);
         printf("%s:%d station=%s, latLon=(%s, %s)\n", __FUNCTION__, __LINE__, $station, $row['lat'], $row['lon']);
-        return $stations[$station];;
+        return $stations[$station];
     }
 
     if ($ch === false) {
@@ -203,39 +72,33 @@ function fetchLatLon($station)
     }
 
     if ($ch === null) {
-        // Initialize curl
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_USERAGENT, CURL_OTHER_USERAGENT);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 
-        if(!$ch) {
+        if (!$ch) {
             $ch = false;
             printf("%s:%d station=%s, latLon=null\n", __FUNCTION__, __LINE__, $station);
             return null;
         }
     }
 
-    // As a last resort, let's check gcmap.com for the lat/lon.
     $url = "https://www.gcmap.com/airport/{$station}";
-
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
     curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
 
-    rateLimit("gcmap");
-    if(!($result = curl_exec($ch))) {
-        $url = null;
+    $rateLimiter->wait('gcmap');
+    if (!($result = curl_exec($ch))) {
         printf("%s:%d station=%s, latLon=null\n", __FUNCTION__, __LINE__, $station);
         $stations[$station] = null;
         return null;
     }
 
-    // Parse the html from gcmap.com and send them a thank you card.
     $regex = ";abbr class=\"latitude\" title=\"([0-9.-]+)\".*?abbr class=\"longitude\" title=\"([0-9.-]+)\";smi";
     if (preg_match($regex, $result, $regs)) {
         $lat = $regs[1];
         $lon = $regs[2];
-
         printf("%s:%d station=%s, latLon=(%s, %s)\n", __FUNCTION__, __LINE__, $station, $lat, $lon);
         $stations[$station] = array($lat, $lon);
     } else {
@@ -243,80 +106,81 @@ function fetchLatLon($station)
         $stations[$station] = null;
     }
 
-    //todo: send virtual thank you card to gcmap.com
-
     return $stations[$station];
 }
 
-function updatePilot($name, $flair)
+
+function updatePilot($conn, $name, $flair, RateLimiter $rateLimiter)
 {
-  return updatePilot93($name, $flair); // PostgreSQL 9.3
+    return updatePilot93($conn, $name, $flair, $rateLimiter);
 }
 
-function updatePilot93($name, $flair)
-{
-    $forceLatLonUpdate = true;
 
-    $station = parseStation($flair);
-
-    $pgName = pg_escape_string($name);
-    $pgStation = pg_escape_string($station);
-    $pgFlair = pg_escape_string($flair);
-
-    $sql = sprintf("SELECT name, station, lat, lon, locked FROM %s WHERE name = '%s';", PG_TABLE, $pgName);
-    $select = pg_query($sql);
-
-    $latLon = ($forceLatLonUpdate || pg_num_rows($select) == 0) ? fetchLatLon($station) : null;
-
-    if (is_array($latLon)) {
-        $lat = (double) $latLon[0];
-        $lon = (double) $latLon[1];
-    } else {
-        $lat = 'null';
-        $lon = 'null';
-    }
-
-    $count = pg_num_rows($select);
-    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s, rows=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair, $count);
-    if ($count == 0) {
-        $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW());", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair);
-        printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
-        $insert = pg_query($sql);
-    } else {
-        $row = pg_fetch_assoc($select);
-        if ($forceLatLonUpdate || $row['station'] != $station) {
-            if ($row['locked'] == 'f' && ($row['station'] != 'n/a' || $station != '')) {
-                $sql = sprintf("UPDATE %s SET time_updated = NOW(), station = '%s', flair = '%s', lat = %s, lon = %s WHERE name = '%s';", PG_TABLE, $pgStation, $pgFlair, $lat, $lon, $pgName);
-                printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
-                $update = pg_query($sql);
-            }
-        }
-    }
-}
-
-function updatePilot95($name, $flair)
+function updatePilot93($conn, $name, $flair, RateLimiter $rateLimiter)
 {
     $station = parseStation($flair);
 
-    $pgName = pg_escape_string($name);
-    $pgStation = pg_escape_string($station);
-    $pgFlair = pg_escape_string($flair);
+    $select = pg_query_params($conn,
+        "SELECT name, station, lat, lon, locked FROM " . PG_TABLE . " WHERE name = $1",
+        array($name)
+    );
 
-    $latLon = fetchLatLon($station);
+    $existingRow    = pg_num_rows($select) > 0 ? pg_fetch_assoc($select) : null;
+    $stationChanged = ($existingRow === null || $existingRow['station'] !== $station);
+    $latLon         = $stationChanged ? fetchLatLon($conn, $station, $rateLimiter) : null;
+    $latParam       = is_array($latLon) ? (double)$latLon[0] : null;
+    $lonParam       = is_array($latLon) ? (double)$latLon[1] : null;
 
-    if (is_array($latLon)) {
-        $lat = (double) $latLon[0];
-        $lon = (double) $latLon[1];
-    } else {
-        $lat = 'null';
-        $lon = 'null';
+    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s, rows=%d\n",
+        __FUNCTION__, __LINE__, $station, $name,
+        $latParam !== null ? $latParam : 'null',
+        $lonParam !== null ? $lonParam : 'null',
+        $flair, $existingRow !== null ? 1 : 0
+    );
+
+    if ($existingRow === null) {
+        pg_query_params($conn,
+            "INSERT INTO " . PG_TABLE . " (name, station, lat, lon, flair, time_updated) VALUES ($1, $2, $3, $4, $5, NOW())",
+            array($name, $station, $latParam, $lonParam, $flair)
+        );
+    } elseif ($stationChanged
+        && $existingRow['locked'] !== 't'
+        && ($existingRow['station'] !== 'n/a' || $station !== ''))
+    {
+        pg_query_params($conn,
+            "UPDATE " . PG_TABLE . " SET time_updated = NOW(), station = $1, flair = $2, lat = $3, lon = $4 WHERE name = $5",
+            array($station, $flair, $latParam, $lonParam, $name)
+        );
     }
-
-    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair);
-    $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW()) ON CONFLICT(name) DO UPDATE SET time_updated = NOW(), station = '%s', flair = '%s', lat = %s, lon = %s WHERE %s.locked = false;", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair, $pgStation, $pgFlair, $lat, $lon, PG_TABLE);
-    printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
-    $insert = pg_query($sql);
 }
+
+
+function updatePilot95($conn, $name, $flair, RateLimiter $rateLimiter)
+{
+    $station  = parseStation($flair);
+    $latLon   = fetchLatLon($conn, $station, $rateLimiter);
+    $latParam = is_array($latLon) ? (double)$latLon[0] : null;
+    $lonParam = is_array($latLon) ? (double)$latLon[1] : null;
+
+    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s\n",
+        __FUNCTION__, __LINE__, $station, $name,
+        $latParam !== null ? $latParam : 'null',
+        $lonParam !== null ? $lonParam : 'null',
+        $flair
+    );
+    pg_query_params($conn,
+        "INSERT INTO " . PG_TABLE . " (name, station, lat, lon, flair, time_updated) VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT(name) DO UPDATE SET
+           time_updated = NOW(),
+           station      = EXCLUDED.station,
+           flair        = EXCLUDED.flair,
+           lat          = EXCLUDED.lat,
+           lon          = EXCLUDED.lon
+         WHERE " . PG_TABLE . ".locked = false",
+        array($name, $station, $latParam, $lonParam, $flair)
+    );
+}
+
 
 function parseStation($flair)
 {
@@ -341,8 +205,20 @@ function parseStation($flair)
     return strtoupper($station);
 }
 
-while ($flairs = fetchFlairPage()) {
+
+$client = new RedditFlairClient(
+    REDDIT_USERNAME,
+    REDDIT_PASSWORD,
+    REDDIT_API_APP,
+    REDDIT_API_SECRET,
+    URL_REDDIT_FLAIR,
+    URL_REDDIT_ACCESS_TOKEN,
+    CURL_REDDIT_USERAGENT,
+    $rateLimiter
+);
+
+while (($flairs = $client->fetchNextPage()) !== null) {
     foreach ($flairs as $name => $flair) {
-        updatePilot($name, $flair);
+        updatePilot($conn, $name, $flair, $rateLimiter);
     }
 }
