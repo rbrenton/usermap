@@ -1,0 +1,24 @@
+{
+    "name": "rbrenton/usermap",
+    "description": "Maps Reddit users by their home location based on subreddit flair.",
+    "type": "project",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "R. Brenton Strickler"
+        }
+    ],
+    "require": {
+        "php": ">=7.4",
+        "ext-pgsql": "*",
+        "ext-curl": "*"
+    },
+    "autoload": {
+        "classmap": [
+            "lib/"
+        ]
+    },
+    "scripts": {
+        "lint": "find . -path ./vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l"
+    }
+}

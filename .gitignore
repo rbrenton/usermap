@@ -1,1 +1,14 @@
+# Local configuration with credentials
 /settings.php
+
+# Composer
+/vendor/
+composer.lock
+
+# Logs
+*.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
