@@ -260,6 +260,9 @@ function fetchLatLon($station)
 
 function updatePilot($name, $flair)
 {
+  // Defaults to the PostgreSQL 9.3-compatible path (SELECT then INSERT/UPDATE).
+  // On PostgreSQL 9.5+, switch to updatePilot95() for a single INSERT ... ON
+  // CONFLICT upsert; both paths honor the `locked` flag and the n/a guard.
   return updatePilot93($name, $flair); // PostgreSQL 9.3
 }
 
@@ -322,8 +325,8 @@ function updatePilot95($name, $flair)
         $lon = 'null';
     }
 
-    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s, rows=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair, $count);
-    $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW()) ON CONFLICT(name) DO UPDATE SET time_updated = NOW(), station = '%s', flair = '%s', lat = %s, lon = %s;", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair, $pgStation, $pgFlair, $lat, $lon);
+    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair);
+    $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW()) ON CONFLICT(name) DO UPDATE SET time_updated = NOW(), station = EXCLUDED.station, flair = EXCLUDED.flair, lat = EXCLUDED.lat, lon = EXCLUDED.lon WHERE %s.locked = false AND (%s.station <> 'n/a' OR EXCLUDED.station <> '');", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair, PG_TABLE, PG_TABLE);
     printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
     $insert = pg_query($sql);
 }

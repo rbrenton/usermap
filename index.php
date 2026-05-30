@@ -53,7 +53,7 @@ function echoStationJSON($station, $pilots) {
   echo json_encode(array('title'=>"{$stationVar} - {$count}",'count'=>$count,'lon'=>$lon,'lat'=>$lat, 'html'=>$html)).',';
 }
 
-switch ($_GET['a']) {
+switch ($_GET['a'] ?? '') {
 case 'data.json':
   $conn = @pg_connect(PG_CONNECTION_STRING);
   $stations = array();
@@ -106,11 +106,11 @@ default:
   throw new Exception('Invalid page');
 case '':
 }
-$defaultLat = 37.0625;
-$defaultLon = -95.677068;
-$defaultZoom = 2;
+$defaultLat = GMAP_DEFAULT_LAT;
+$defaultLon = GMAP_DEFAULT_LON;
+$defaultZoom = GMAP_DEFAULT_ZOOM;
 
-if ($_GET['name']!='') {
+if (($_GET['name'] ?? '') != '') {
   $conn = @pg_connect(PG_CONNECTION_STRING);
   $nameSQL = pg_escape_string($_GET['name']);
   $select = pg_query("SELECT name,station,lat,lon,flair FROM ".PG_TABLE." WHERE name='{$nameSQL}' AND lat IS NOT NULL LIMIT 1;");
@@ -136,7 +136,7 @@ $header = HTML_HEADER;
   <div id="header"><?php echo $header; ?></div>
   <div id="map_canvas" style="width:100%; height:100%"></div>
   <script type="text/javascript" src="//code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8=" crossorigin="anonymous"></script>
-  <script type="text/javascript" src="//maps.google.com/maps/api/js?key=AIzaSyBnc3A-F4S2J9l2A_1bez6q8fsbg97ZBDI&sensor=false"></script>
+  <script type="text/javascript" src="//maps.google.com/maps/api/js?key=<?php echo rawurlencode(GMAP_API_KEY); ?>&sensor=false"></script>
   <script type="text/javascript" src="?a=data.json"></script>
   <script type="text/javascript" src="js/markerclusterer.js"></script>
   <script type="text/javascript">
@@ -202,11 +202,22 @@ $header = HTML_HEADER;
     var e = [];
     function s2k(s) { return s.replace('!3m9', '').replace('!2m3!1e2!6m1!3e5!3m14', '').replace(/!12m4!1e26!2m2!1sstyles!2z[^!]+/, '').replace(/&key=.*/, ''); }
     function b2s(b) { var k = s2k(b); return (typeof e[k] != 'undefined') ? e[k] : b.replace('!2m3!1e2!6m1!3e5!3m14', '!3m9'); }
-    $('#map_canvas').on('DOMSubtreeModified', 'div[tabindex=0]', function() {
-      var el = $(this);
-      el.find('img[src*=3m9]').each(function() { var s = $(this).attr('src'); e[s2k(s)] = s; });
-      el.find('img[src*=2m3]').each(function() { var b = $(this).attr('src'); $(this).attr('src', b2s(b)); });
+    var mapCanvas = document.getElementById('map_canvas');
+    var tileObserveConfig = { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] };
+    function processTiles() {
+      $(mapCanvas).find('img[src*="3m9"]').each(function() { var s = $(this).attr('src'); e[s2k(s)] = s; });
+      $(mapCanvas).find('img[src*="2m3"]').each(function() {
+        var b = $(this).attr('src');
+        var n = b2s(b);
+        if (n !== b) { $(this).attr('src', n); }
+      });
+    }
+    var tileObserver = new MutationObserver(function() {
+      tileObserver.disconnect();
+      processTiles();
+      tileObserver.observe(mapCanvas, tileObserveConfig);
     });
+    tileObserver.observe(mapCanvas, tileObserveConfig);
   }
 
   google.maps.event.addDomListener(window, 'load', initialize);

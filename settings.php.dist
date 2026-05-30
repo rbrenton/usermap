@@ -1,13 +1,14 @@
 <?php
 
 define('PG_CONNECTION_STRING', 'host=127.0.0.1 user=someuser dbname=somedb password=somepw');
-define('PG_TABLE', 'usermap_locations');
+define('PG_TABLE', 'rflying_locations');
 define('REDDIT_USERNAME', 'your username here');
 define('REDDIT_PASSWORD', 'your password here');
 define('REDDIT_API_APP', 'fixme');
 define('REDDIT_API_SECRET', 'fixme');
 define('HTML_TITLE', 'r/flying Home Bases');
 define('HTML_HEADER', 'Home base map of <a href="http://www.reddit.com/r/flying">r/flying</a>.');
+define('GMAP_API_KEY', 'your-google-maps-api-key');
 define('GMAP_DEFAULT_LAT', 37.0625);
 define('GMAP_DEFAULT_LON', -95.677068);
 define('GMAP_DEFAULT_ZOOM', 2);
