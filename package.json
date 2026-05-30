@@ -1,0 +1,21 @@
+{
+  "name": "usermap",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Maps r/flying users by home airport (parsed from subreddit flair) on a Cloudflare Worker backed by D1.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
+    "db:init": "wrangler d1 execute usermap --remote --file=./schema.sql",
+    "db:init:local": "wrangler d1 execute usermap --local --file=./schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260530.1",
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.95.0"
+  }
+}

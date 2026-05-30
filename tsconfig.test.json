@@ -1,0 +1,10 @@
+{
+  // Tests run on Node (node --experimental-strip-types), so they use Node types
+  // instead of the Worker runtime types. src/lib.ts is pure (no Worker globals),
+  // so it is type-checked here against the tests that import it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["test/**/*.ts", "src/lib.ts"]
+}

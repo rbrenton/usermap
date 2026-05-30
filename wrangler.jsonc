@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "usermap",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "assets": { "directory": "./public" },
+  // Don't bundle assets (e.g. public/js/*.js) into the Worker; they are served
+  // as static assets. Worker code is reached via explicit imports only.
+  "find_additional_modules": false,
+  "observability": { "enabled": true },
+
+  // Ingest job: pull r/flying flair, geocode new stations, upsert into D1.
+  "triggers": { "crons": ["0 * * * *"] },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "usermap",
+      // Replace after `wrangler d1 create usermap`.
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+
+  // Non-secret config. Secrets (REDDIT_*, GMAP_API_KEY) are set with
+  // `wrangler secret put <NAME>` or a local .dev.vars file.
+  "vars": {
+    "HTML_TITLE": "r/flying Home Bases",
+    "HTML_HEADER": "Home base map of <a href=\"https://www.reddit.com/r/flying\">r/flying</a>.",
+    "GMAP_DEFAULT_LAT": 37.0625,
+    "GMAP_DEFAULT_LON": -95.677068,
+    "GMAP_DEFAULT_ZOOM": 2,
+    "REDDIT_FLAIR_URL": "https://oauth.reddit.com/r/flying/api/flairlist.json?limit=500",
+    "REDDIT_TOKEN_URL": "https://www.reddit.com/api/v1/access_token",
+    "REDDIT_USER_AGENT": "script:com.github.rbrenton.usermap:v2.0.0 (by /u/prothid)",
+    "GEO_USER_AGENT": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:10.0.2) Gecko/20100101 Firefox/10.0.2",
+    "MAX_GEOCODES_PER_RUN": 50
+  }
+}

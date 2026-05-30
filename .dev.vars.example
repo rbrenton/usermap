@@ -1,0 +1,10 @@
+# Copy to .dev.vars for `wrangler dev`, and set the same values in production
+# with `wrangler secret put <NAME>`. Do NOT commit real values (.dev.vars is
+# git-ignored).
+REDDIT_USERNAME="your-reddit-username"
+REDDIT_PASSWORD="your-reddit-password"
+REDDIT_API_APP="your-reddit-app-id"
+REDDIT_API_SECRET="your-reddit-app-secret"
+# Browser Maps key — exposed to clients by design, so restrict it by HTTP
+# referrer in the Google Cloud console.
+GMAP_API_KEY="your-google-maps-api-key"

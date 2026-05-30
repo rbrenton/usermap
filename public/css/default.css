@@ -1,0 +1,16 @@
+html, body { height: 100%; margin: 0; padding: 0; }
+
+#map_canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+#header {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  padding: 5px;
+  background: #EEE;
+  font-family: sans-serif;
+}
+
+/* Hide Google's injected overlay element (carried over from the original). */
+#map_canvas > div:nth-child(2) { display: none; }

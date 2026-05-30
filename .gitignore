@@ -1,1 +1,5 @@
-/settings.php
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
