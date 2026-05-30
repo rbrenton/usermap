@@ -1,3 +1,4 @@
+-- Requires PostgreSQL 9.5+ (cron.php uses INSERT ... ON CONFLICT). PG 17 recommended.
 CREATE TABLE rflying_locations (
     name character varying(64) NOT NULL,
     station character varying(4) NOT NULL,

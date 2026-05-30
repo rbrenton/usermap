@@ -260,55 +260,8 @@ function fetchLatLon($station)
 
 function updatePilot($name, $flair)
 {
-  // Defaults to the PostgreSQL 9.3-compatible path (SELECT then INSERT/UPDATE).
-  // On PostgreSQL 9.5+, switch to updatePilot95() for a single INSERT ... ON
-  // CONFLICT upsert; both paths honor the `locked` flag and the n/a guard.
-  return updatePilot93($name, $flair); // PostgreSQL 9.3
-}
-
-function updatePilot93($name, $flair)
-{
-    $forceLatLonUpdate = true;
-
-    $station = parseStation($flair);
-
-    $pgName = pg_escape_string($name);
-    $pgStation = pg_escape_string($station);
-    $pgFlair = pg_escape_string($flair);
-
-    $sql = sprintf("SELECT name, station, lat, lon, locked FROM %s WHERE name = '%s';", PG_TABLE, $pgName);
-    $select = pg_query($sql);
-
-    $latLon = ($forceLatLonUpdate || pg_num_rows($select) == 0) ? fetchLatLon($station) : null;
-
-    if (is_array($latLon)) {
-        $lat = (double) $latLon[0];
-        $lon = (double) $latLon[1];
-    } else {
-        $lat = 'null';
-        $lon = 'null';
-    }
-
-    $count = pg_num_rows($select);
-    printf("%s:%d station=%s, name=%s, lat=%s, lon=%s, flair=%s, rows=%s\n", __FUNCTION__, __LINE__, $station, $name, $lat, $lon, $flair, $count);
-    if ($count == 0) {
-        $sql = sprintf("INSERT INTO %s (name, station, lat, lon, flair, time_updated) VALUES ('%s', '%s', %s, %s, '%s', NOW());", PG_TABLE, $pgName, $pgStation, $lat, $lon, $pgFlair);
-        printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
-        $insert = pg_query($sql);
-    } else {
-        $row = pg_fetch_assoc($select);
-        if ($forceLatLonUpdate || $row['station'] != $station) {
-            if ($row['locked'] == 'f' && ($row['station'] != 'n/a' || $station != '')) {
-                $sql = sprintf("UPDATE %s SET time_updated = NOW(), station = '%s', flair = '%s', lat = %s, lon = %s WHERE name = '%s';", PG_TABLE, $pgStation, $pgFlair, $lat, $lon, $pgName);
-                printf("%s:%d sql=%s\n", __FUNCTION__, __LINE__, $sql);
-                $update = pg_query($sql);
-            }
-        }
-    }
-}
-
-function updatePilot95($name, $flair)
-{
+    // Single INSERT ... ON CONFLICT upsert (PostgreSQL 9.5+). Honors the
+    // `locked` flag and won't overwrite a real station with an empty one.
     $station = parseStation($flair);
 
     $pgName = pg_escape_string($name);
